@@ -97,19 +97,19 @@ Cuando hayas iniciado sesión, encontrarás tu correo en el menú junto con un b
 
 ### Preguntas Frecuentes
 
-**P: ¿Necesito crear una cuenta para ver los productos?**  
+**P: ¿Necesito crear una cuenta para ver los productos?**
 R: No, puedes ver el catálogo sin crear una cuenta, pero necesitarás una para acceder a funcionalidades futuras como el carrito de compras.
 
-**P: ¿Los precios incluyen IVA?**  
+**P: ¿Los precios incluyen IVA?**
 R: Sí, todos los precios mostrados ya incluyen IVA.
 
-**P: ¿Cómo puedo hacer un pedido?**  
+**P: ¿Cómo puedo hacer un pedido?**
 R: La funcionalidad de carrito de compras está en desarrollo. Por ahora, puedes ver nuestro catálogo y contactarnos directamente.
 
-**P: ¿La aplicación funciona en móviles?**  
+**P: ¿La aplicación funciona en móviles?**
 R: Sí, la aplicación está completamente optimizada para dispositivos móviles, tablets y computadoras de escritorio.
 
-**P: ¿Olvide mi contraseña, qué hago?**  
+**P: ¿Olvide mi contraseña, qué hago?**
 R: La funcionalidad de recuperación de contraseña estará disponible próximamente. Por ahora, contacta al soporte.
 
 ---
@@ -233,8 +233,10 @@ bollosJuarez/
 │   │   ├── Register.vue     # Registro de usuarios
 │   │   └── SignIn.vue       # Inicio de sesión
 │   ├── App.vue              # Componente raíz
-│   ├── main.js              # Punto de entrada, configuración Firebase
+│   ├── firebase.js          # ⭐ NUEVO: Configuración centralizada de Firebase
+│   ├── main.js              # Punto de entrada de la aplicación
 │   └── style.css            # Estilos globales
+├── .env                     # Variables de entorno (NO SUBIR A GIT)
 ├── .gitignore               # Archivos ignorados por Git
 ├── index.html               # HTML principal
 ├── package.json             # Dependencias y scripts
@@ -275,27 +277,55 @@ bollosJuarez/
 
 #### 1. Autenticación con Firebase
 
-**Archivo**: `src/main.js`, `src/App.vue`
+**Archivos**: `src/firebase.js`, `src/main.js`, `src/App.vue`
 
+La configuración de Firebase ahora está **centralizada** en un archivo dedicado:
+
+**`src/firebase.js`** (Nuevo archivo - v1.0):
 ```javascript
-// Inicialización de Firebase
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 
 // Configuración con variables de entorno
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  // ...
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-initializeApp(firebaseConfig);
+// Inicializar Firebase
+const app = initializeApp(firebaseConfig);
+
+// Exportar instancia de auth para uso en toda la app
+export const auth = getAuth(app);
+export default app;
+```
+
+**`src/main.js`** (Actualizado):
+```javascript
+import { createApp } from 'vue'
+import './style.css'
+import App from './App.vue'
+import router from './router'
+
+// Importar Firebase para inicializarlo
+import './firebase'
+
+const app = createApp(App)
+app.use(router)
+app.mount('#app')
 ```
 
 **Características**:
-- Configuración segura con variables de entorno
-- Estado de autenticación reactivo
-- Observador de cambios de autenticación (`onAuthStateChanged`)
-- Cierre de sesión seguro
+- ✅ **Configuración centralizada**: Un solo punto de inicialización de Firebase
+- ✅ **Instancia única de auth**: Exportada desde `firebase.js` y compartida en toda la app
+- ✅ **Configuración segura**: Variables de entorno protegen credenciales
+- ✅ **Debug integrado**: Console logs verifican la carga de variables de entorno
+- ✅ **Estado de autenticación reactivo**: Observador de cambios de autenticación
+- ✅ **Mejor mantenibilidad**: Cambios de config en un solo archivo
 
 #### 2. Protección de Rutas
 
@@ -354,43 +384,98 @@ const filteredProducts = computed(() => {
 ```
 1. Usuario visita la app
    ↓
-2. App.vue inicia observer de autenticación
+2. main.js importa './firebase' → Firebase se inicializa
    ↓
-3. Firebase verifica estado (onAuthStateChanged)
+3. App.vue importa { auth } desde './firebase.js'
    ↓
-4. Si hay usuario → isLoggedIn = true
-   Si no hay usuario → isLoggedIn = false
+4. App.vue inicia observer de autenticación (onAuthStateChanged)
    ↓
-5. UI se actualiza reactivamente
+5. Firebase verifica estado del usuario
    ↓
-6. Router protege rutas según estado
+6. Si hay usuario → isLoggedIn = true, userEmail = user.email
+   Si no hay usuario → isLoggedIn = false, userEmail = ''
+   ↓
+7. UI se actualiza reactivamente (mostrar/ocultar nav items)
+   ↓
+8. Router protege rutas según estado de autenticación
+   ↓
+9. Componentes Register/SignIn usan misma instancia de auth
+   ↓
+10. Cambios de estado se propagan automáticamente a App.vue
 ```
 
-### API de Firebase Utilizada
+**Cambios importantes en v1.0**:
+- ✅ Firebase se inicializa una sola vez en `firebase.js`
+- ✅ Todos los componentes importan la misma instancia de `auth`
+- ✅ Eliminado `getAuth()` de componentes individuales
+- ✅ Mejor control de errores con debug logs en firebase.js
+
+#### API de Firebase Utilizada
 
 #### Authentication
 
 ```javascript
-// Obtener instancia de Auth
-import { getAuth } from "firebase/auth";
-const auth = getAuth();
+// NUEVA ESTRUCTURA - Importar auth desde firebase.js
+import { auth } from './firebase.js';
+import { onAuthStateChanged, signOut, createUserWithEmailAndPassword,
+         signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
-// Observer de estado
-import { onAuthStateChanged } from "firebase/auth";
+// Observer de estado (en App.vue)
 onAuthStateChanged(auth, (user) => {
   if (user) {
     // Usuario autenticado
+    isLoggedIn.value = true;
+    userEmail.value = user.email;
   } else {
     // Usuario no autenticado
+    isLoggedIn.value = false;
+    userEmail.value = '';
   }
 });
 
-// Cerrar sesión
-import { signOut } from "firebase/auth";
+// Registro de usuario (en Register.vue)
+createUserWithEmailAndPassword(auth, email.value, password.value)
+  .then((data) => {
+    console.log("Successfully registered!");
+    router.push("/feed");
+  })
+  .catch((error) => {
+    console.log(error.code);
+  });
+
+// Inicio de sesión (en SignIn.vue)
+signInWithEmailAndPassword(auth, email.value, password.value)
+  .then((data) => {
+    console.log("Successfully signed in!");
+    router.push("/feed");
+  })
+  .catch((error) => {
+    console.log(error.code);
+  });
+
+// Inicio de sesión con Google (Register.vue y SignIn.vue)
+const provider = new GoogleAuthProvider();
+signInWithPopup(auth, provider)
+  .then((result) => {
+    console.log(result.user);
+    router.push("/feed");
+  })
+  .catch((error) => {
+    console.log(error.code);
+  });
+
+// Cerrar sesión (en App.vue)
 signOut(auth).then(() => {
-  // Sesión cerrada
+  router.push("/");
 });
 ```
+
+**Ventajas de la nueva arquitectura**:
+- ✅ Instancia única de `auth` compartida en toda la app
+- ✅ No más llamadas a `getAuth()` en cada componente
+- ✅ Inicialización garantizada antes de usar auth
+- ✅ Código más limpio y mantenible
+- ✅ Evita errores de "Firebase not initialized"
 
 ### Despliegue
 
@@ -542,21 +627,40 @@ npm run preview  # Vista previa de build
 
 #### Error al hacer build
 
-**Causa**: Variables de entorno no configuradas.  
+**Causa**: Variables de entorno no configuradas.
 **Solución**: Verifica que el archivo `.env` existe con todas las variables necesarias.
 
 #### La autenticación no funciona
 
-**Causa**: Configuración incorrecta de Firebase.  
-**Solución**: 
+**Causa**: Configuración incorrecta de Firebase.
+**Solución**:
 1. Verifica las credenciales en `.env`
 2. Asegúrate de que Firebase Authentication esté habilitado en la consola
 3. Verifica que el método Email/Password esté activado
 
 #### Rutas no funcionan después del deploy
 
-**Causa**: Configuración SPA incorrecta en el hosting.  
+**Causa**: Configuración SPA incorrecta en el hosting.
 **Solución**: Configura las redirecciones según la plataforma (ver sección de Despliegue).
+
+#### Error: "Cannot read properties of undefined (reading 'getProvider')"
+
+**Causa**: Firebase no se inicializó correctamente o componentes intentan usar auth antes de inicializarse.
+**Solución**:
+1. ✅ **YA RESUELTO en v1.0**: La configuración centralizada en `firebase.js` garantiza inicialización correcta
+2. Verifica que todos los componentes importen auth desde `'./firebase.js'` o `'../firebase.js'`
+3. No uses `getAuth()` directamente en componentes, usa la instancia exportada
+4. Verifica en consola los logs de "Firebase Config Check" para confirmar variables de entorno
+
+#### Error: Variables de entorno undefined en producción
+
+**Causa**: Variables de entorno no configuradas en la plataforma de hosting.
+**Solución**:
+1. En **Netlify**: Ve a Site Settings → Environment Variables → Add variables
+2. En **Vercel**: Ve a Project Settings → Environment Variables → Add
+3. Asegúrate de incluir el prefijo `VITE_` en cada variable
+4. Redeploy después de agregar variables
+5. Verifica en los logs de build que las variables se cargaron
 
 ### Contribuciones
 
@@ -578,8 +682,67 @@ Para soporte técnico o consultas sobre la aplicación:
 
 ---
 
-**Última actualización**: 2025  
-**Versión**: 0.0.0  
+## Historial de Cambios
+
+### Versión 1.0 (29 de Octubre, 2025)
+
+**🔧 Refactorización de Firebase - Commit b6acd2a**
+
+**Cambios principales**:
+
+1. **Nuevo archivo `src/firebase.js`**:
+   - Centraliza toda la configuración de Firebase
+   - Exporta instancia única de `auth` para uso global
+   - Incluye debug logs para verificar variables de entorno
+   - Validación de configuración al inicializar
+
+2. **Actualización de `src/main.js`**:
+   - Eliminada configuración inline de Firebase
+   - Ahora importa `'./firebase'` para inicializar Firebase
+   - Código más limpio y enfocado en montar la app Vue
+
+3. **Actualización de `src/App.vue`**:
+   - Ya no llama a `getAuth()` directamente
+   - Importa `{ auth }` desde `'./firebase.js'`
+   - Usa instancia compartida de auth
+
+4. **Actualización de `src/views/Register.vue`**:
+   - Importa `{ auth }` desde `'../firebase.js'`
+   - Reemplazadas todas las llamadas a `getAuth()` con `auth`
+   - Mantiene funcionalidad de registro con Email/Password
+   - Mantiene funcionalidad de registro con Google
+
+5. **Actualización de `src/views/SignIn.vue`**:
+   - Importa `{ auth }` desde `'../firebase.js'`
+   - Reemplazadas todas las llamadas a `getAuth()` con `auth`
+   - Mantiene funcionalidad de login con Email/Password
+   - Mantiene funcionalidad de login con Google
+
+**Motivación del cambio**:
+- Resolver error "Cannot read properties of undefined (reading 'getProvider')" en producción
+- Garantizar inicialización única de Firebase
+- Mejorar mantenibilidad y organización del código
+- Evitar múltiples inicializaciones de Firebase
+- Centralizar configuración para facilitar futuros cambios
+
+**Impacto**:
+- ✅ Código más mantenible y organizado
+- ✅ Eliminado riesgo de inicialización múltiple
+- ✅ Mejor experiencia de desarrollo con debug logs
+- ✅ Solución definitiva a errores de runtime en producción
+- ✅ Patrón recomendado por documentación de Firebase
+
+**Archivos modificados**:
+- `src/firebase.js` (creado)
+- `src/main.js` (actualizado)
+- `src/App.vue` (actualizado)
+- `src/views/Register.vue` (actualizado)
+- `src/views/SignIn.vue` (actualizado)
+
+---
+
+**Última actualización**: 29 de Octubre, 2025
+**Versión**: 1.0
 **Licencia**: Privada
 
 © 2025 Heladería Juárez - Refrescando tus días con sabor ❄️🍦
