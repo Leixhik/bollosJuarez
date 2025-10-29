@@ -1,6 +1,11 @@
 <script setup>
 import { ref } from "vue";
-import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup
+} from "firebase/auth";
+import { auth } from '../firebase.js';
 import { useRouter } from "vue-router";
 
 const email = ref("");
@@ -22,7 +27,7 @@ const signIn = () => {
 
   isLoading.value = true;
 
-  signInWithEmailAndPassword(getAuth(), email.value, password.value)
+  signInWithEmailAndPassword(auth, email.value, password.value)
     .then((data) => {
       console.log("Successfully signed in!");
       console.log(data.user);
@@ -63,7 +68,7 @@ const signIn = () => {
 
 const signInWithGoogle = () => {
   const provider = new GoogleAuthProvider();
-  signInWithPopup(getAuth(), provider)
+  signInWithPopup(auth, provider)
     .then((result) => {
       console.log(result.user);
       router.push("/feed");
